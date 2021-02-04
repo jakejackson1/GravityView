@@ -375,6 +375,27 @@ class GravityView_Edit_Entry_Render {
 			 */
 			do_action( 'gravityview/edit_entry/before_update', $form, $this->entry['id'], $this, $gv_data );
 
+			foreach( $form['fields'] as $field ) {
+				if($field->type === 'fileupload') {
+					$form_id = $form['id'];
+					$entry = $this->entry;
+					$input_name = 'input_'.$field->id;
+
+					$value = NULL;
+
+					// Use the previous entry value as the default.
+					if( isset( $entry[ $field->id ] ) ) {
+						$value = $entry[ $field->id ];
+					}
+
+					if ( isset( GFFormsModel::$uploaded_files[ $form_id ][ $input_name ] ) ) {
+						$value = empty( $value ) ? '[]' : $value;
+						$value = stripslashes_deep( $value );
+						$value = GFFormsModel::prepare_value( $form, $field, $value, $input_name, $entry['id'], [] );
+					}
+				}
+			}
+
 			GFFormsModel::save_lead( $form, $this->entry );
 
 	        // Delete the values for hidden inputs
@@ -1639,9 +1660,13 @@ class GravityView_Edit_Entry_Render {
 				        // If there are fresh uploads, process and merge them.
 				        // Otherwise, use the passed values, which should be json-encoded array of URLs
 				        if( isset( GFFormsModel::$uploaded_files[$form_id][$input_name] ) ) {
-				            $value = empty( $value ) ? '[]' : $value;
-				            $value = stripslashes_deep( $value );
-				            $value = GFFormsModel::prepare_value( $form, $field, $value, $input_name, $entry['id'], array());
+					        if ( ! empty( $value ) ) { // merge with existing files (admin edit entry)
+						        $value = json_decode( $value, true );
+						        $value = array_merge( $value, GFFormsModel::$uploaded_files[$form_id][$input_name] );
+						        $value = json_encode( $value );
+					        } else {
+						        $value = json_encode( GFFormsModel::$uploaded_files[$form_id][$input_name] );
+					        }
 				        }
 
 				    } else {
@@ -2229,7 +2254,7 @@ class GravityView_Edit_Entry_Render {
 			foreach ( $form['fields'] as &$field ) {
 				foreach ( $remove_conditions_rule as $_remove_conditions_r ) {
 
-				    list( $rule_field_id, $rule_i ) = $_remove_conditions_r;
+				    [ $rule_field_id, $rule_i ] = $_remove_conditions_r;
 
 					if ( $field['id'] == $rule_field_id ) {
 						unset( $field->conditionalLogic['rules'][ $rule_i ] );
